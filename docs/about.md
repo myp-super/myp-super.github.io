@@ -1,21 +1,39 @@
-# About Me
+# 关于我
 
-I work across **Artificial Intelligence and Control** and **Information and Communication Engineering**,
-with a strong passion for **Artificial Intelligence and Computer Vision**.
+欢迎来到 **Deep Reflection（邃思）**。
 
-My research focuses on visual perception, representation learning and deep learning,
-aiming to develop robust vision algorithms for image and signal understanding.
-I'm also interested in efficient model optimization for practical perception systems.
+这里是我记录经历、整理思考，也安放感受的地方。它不被限定为科技博客，更像一个持续生长的个人集合：有理性分析，也有日常片段；有正在研究的问题，也有暂时没有答案的想法。
 
-Currently, I'm exploring the intersection of:
+## 这里会写什么
 
-**Computer Vision · Deep Learning · Signal Processing · Visual Representation Learning · Efficient Edge AI**
+**科技与实践**  
+人工智能、计算机视觉、工程实现，以及学习和动手过程中遇到的真实问题。
 
-## Contact
+**学习与思考**  
+知识带给我的启发、理解世界的方式，还有那些值得反复推敲的问题。
 
-- Email: [13933838842@163.com](mailto:13933838842@163.com)
-- GitHub: [github.com/myp-super](https://github.com/myp-super)
-- Xiaohongshu: [@myp-super](https://www.xiaohongshu.com/user/profile/632037ea0000000023025c26)
-- Bilibili: [space.bilibili.com/447536368](https://space.bilibili.com/447536368)
+**阅读与输入**  
+读书感悟、文字摘录，以及课程、论文和其他内容带来的思考。
 
-> *"Building robust visual perception models to understand signals and images."*
+**生活与感受**  
+日常里的所感所想、所见所闻，一些平凡但值得留下的瞬间。
+
+**所听与所闻**  
+音乐、声音、对话和偶然听来的故事，以及它们激起的共鸣与联想。
+
+## 为什么是“邃思”
+
+“邃”是深入，“思”是思考，也是思绪。
+
+我希望自己既能向问题深处走，也能认真感受生活本身。这里不追求每篇文章都给出结论，有些文字是总结，有些只是记录；有些关于世界，有些只关于当下。
+
+如果这些文字恰好也让你有所思考、产生共鸣，或者只是陪你停留了一会儿，那就很好。
+
+## 联系我
+
+- 邮箱：[13933838842@163.com](mailto:13933838842@163.com)
+- GitHub：[github.com/myp-super](https://github.com/myp-super)
+- 小红书：[@myp-super](https://www.xiaohongshu.com/user/profile/632037ea0000000023025c26)
+- B 站：[space.bilibili.com/447536368](https://space.bilibili.com/447536368)
+
+> 把经历留下，把问题想清，把感受说真。
