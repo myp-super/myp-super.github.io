@@ -9,7 +9,7 @@ export default defineConfig({
   // 继承博客主题(@sugarat/theme)
   extends: blogTheme,
   lang: 'zh-cn',
-  appearance: false,
+  appearance: true,
   title: 'Deep Reflection（邃思）',
   description: 'AI Research · Computer Vision · Visual Perception',
   head: [
