@@ -13,7 +13,7 @@ export default defineConfig({
   title: 'Deep Reflection（邃思）',
   description: 'AI Research · Computer Vision · Visual Perception',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['link', { rel: 'icon', href: '/avatar.jpg' }],
     // KaTeX 样式，用于公式渲染
     ['link', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css' }]
   ],
@@ -41,7 +41,7 @@ export default defineConfig({
       text: '上次更新于',
     },
 
-    logo: '/logo.png',
+    logo: '/avatar.jpg',
 
     nav: [
       { text: '首页', link: '/' },

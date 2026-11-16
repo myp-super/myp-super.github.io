@@ -50,7 +50,7 @@ button, input, textarea { font-family: inherit; }
   letter-spacing: -0.02em;
   color: var(--dr-ink);
 }
-.VPNavBarTitle .logo { border-radius: 7px; }
+.VPNavBarTitle .logo { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; }
 .VPNavBarMenuLink {
   color: var(--dr-muted);
   font-size: 13px;
@@ -237,6 +237,7 @@ button, input, textarea { font-family: inherit; }
   width: 44px;
   height: 44px;
   border-radius: 10px;
+  object-fit: cover;
   box-shadow: none;
 }
 .blog-author p {
