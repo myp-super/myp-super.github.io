@@ -5,3 +5,6 @@ cache
 .DS_Store
 docs/.vitepress/cache
 docs/.vitepress/dist
+tools/trash/
+tools/**/__pycache__/
+tools/*.py
