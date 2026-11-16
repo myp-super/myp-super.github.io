@@ -1,4 +1,8 @@
 import BlogTheme from '@sugarat/theme'
+import BlogLayout from './BlogLayout.vue'
 import './claude.css'
 
-export default BlogTheme
+export default {
+  extends: BlogTheme,
+  Layout: BlogLayout,
+}
