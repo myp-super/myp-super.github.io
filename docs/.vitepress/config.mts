@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import mathjax3 from 'markdown-it-mathjax3'
 
 // 导入主题的配置
 import { blogTheme } from './blog-theme.ts'
@@ -8,11 +9,18 @@ export default defineConfig({
   // 继承博客主题(@sugarat/theme)
   extends: blogTheme,
   lang: 'zh-cn',
-  title: 'Yupei Ma',
+  title: 'Deep Reflection（邃思）',
   description: 'AI Research · Computer Vision · Visual Perception',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }]
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    // KaTeX 样式，用于公式渲染
+    ['link', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css' }]
   ],
+  markdown: {
+    config: (md) => {
+      md.use(mathjax3)
+    }
+  },
   // 让 Vite 在 SSR 构建时打包该插件（而非外部化），
   // 否则 Node 会直接加载其 .vue 源码导致 ERR_UNKNOWN_FILE_EXTENSION
   vite: {
