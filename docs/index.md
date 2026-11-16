@@ -1,7 +1,7 @@
 ---
 layout: home
 blog:
- name: 'Deep Reflection（邃思）'
+ name: 'Deep Reflection'
  motto: 'AI Research · Computer Vision · Visual Perception'
  inspiring:
   - 'Building robust visual perception models to understand signals and images.'
