@@ -1,0 +1,24 @@
+{
+  "name": "myp-super-blog",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Yupei Ma",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "vitepress build docs",
+    "serve": "vitepress serve docs"
+  },
+  "dependencies": {
+    "@sugarat/theme": "^0.5.33"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {
+    "pagefind": "^1.5.2",
+    "typescript": "^5.9.3",
+    "vitepress": "1.6.4"
+  }
+}
