@@ -7,6 +7,8 @@ import re
 import shutil
 import socket
 import subprocess
+import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -39,6 +41,24 @@ PUBLIC_SITE_NAME = "Cloudflare Pages"
 CF_PROJECT_NAME = os.environ.get("CLOUDFLARE_PAGES_PROJECT", "deep-reflection")
 NPM_EXE = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
 WRANGLER_EXE = str(REPO_ROOT / "node_modules" / ".bin" / "wrangler.cmd")
+PUBLISH_JOB_LOCK = threading.Lock()
+PUBLISH_JOB = {
+    "id": None,
+    "status": "idle",
+    "message": "",
+    "error": "",
+    "logs": [],
+    "started_at": None,
+    "finished_at": None,
+}
+PUBLISH_PROGRESS = [
+    ("暂存更改", "正在整理文章与资源"),
+    ("提交", "正在生成版本"),
+    ("推送到 GitHub", "正在推送源码"),
+    ("检查 Cloudflare 登录", "正在确认部署权限"),
+    ("构建博客", "正在生成页面"),
+    ("部署到 Cloudflare Pages", "正在上传站点"),
+]
 
 app = FastAPI(title="Blog Manager")
 app.add_middleware(
@@ -539,11 +559,20 @@ class PublishPayload(BaseModel):
 
 @app.post("/api/git/publish")
 def git_publish(payload: PublishPayload):
+    return execute_publish(payload)
+
+
+def execute_publish(payload: PublishPayload, progress=None):
     log = []
+
+    def record(item):
+        log.append(item)
+        if progress:
+            progress(list(log))
 
     def step(args, name):
         code, out = run_git(args)
-        log.append({"step": name, "cmd": "git " + " ".join(args), "ok": code == 0, "output": out.strip()})
+        record({"step": name, "cmd": "git " + " ".join(args), "ok": code == 0, "output": out.strip()})
         if code != 0:
             raise HTTPException(500, detail={"failed_step": name, "log": log})
 
@@ -552,7 +581,7 @@ def git_publish(payload: PublishPayload):
     if code == 1:
         step(["commit", "-m", payload.message], "提交")
     elif code == 0:
-        log.append({
+        record({
             "step": "检查更改", "cmd": "git diff --cached --quiet",
             "ok": True, "output": "没有新内容，跳过提交",
         })
@@ -566,13 +595,13 @@ def git_publish(payload: PublishPayload):
     whoami_args = [WRANGLER_EXE, "whoami"]
     code, out = run_process(whoami_args, cf_env)
     whoami_summary = "Cloudflare OAuth 登录有效" if code == 0 else out.strip()
-    log.append({"step": "检查 Cloudflare 登录", "cmd": "wrangler whoami", "ok": code == 0, "output": whoami_summary})
+    record({"step": "检查 Cloudflare 登录", "cmd": "wrangler whoami", "ok": code == 0, "output": whoami_summary})
     if code != 0:
         raise HTTPException(500, detail={"failed_step": "检查 Cloudflare 登录", "log": log})
 
     build_args = [NPM_EXE, "run", "build"]
     code, out = run_process(build_args, cf_env)
-    log.append({"step": "构建博客", "cmd": "npm run build", "ok": code == 0, "output": out.strip()})
+    record({"step": "构建博客", "cmd": "npm run build", "ok": code == 0, "output": out.strip()})
     if code != 0:
         raise HTTPException(500, detail={"failed_step": "构建博客", "log": log})
 
@@ -586,10 +615,76 @@ def git_publish(payload: PublishPayload):
         "--project-name", CF_PROJECT_NAME, "--branch", "main", "--commit-dirty=true",
     ]
     code, out = run_process(deploy_args, cf_env)
-    log.append({"step": "部署到 Cloudflare Pages", "cmd": "wrangler pages deploy", "ok": code == 0, "output": out.strip()})
+    record({"step": "部署到 Cloudflare Pages", "cmd": "wrangler pages deploy", "ok": code == 0, "output": out.strip()})
     if code != 0:
         raise HTTPException(500, detail={"failed_step": "部署到 Cloudflare Pages", "log": log})
     return {"message": "已构建并部署到 Cloudflare Pages", "log": log}
+
+
+def set_publish_job(**fields):
+    with PUBLISH_JOB_LOCK:
+        PUBLISH_JOB.update(fields)
+
+
+def publish_progress(logs):
+    valid = [item for item in logs if item.get("step") != "检查更改"]
+    set_publish_job(logs=valid)
+
+
+def run_publish_job(job_id, message):
+    try:
+        result = execute_publish(PublishPayload(message=message), progress=publish_progress)
+        set_publish_job(
+            status="success",
+            message=result["message"],
+            logs=[
+                item for item in result.get("log", [])
+                if item.get("step") != "检查更改"
+            ],
+            finished_at=datetime.now().astimezone().isoformat(),
+        )
+    except HTTPException as e:
+        detail = e.detail
+        logs = detail.get("log", []) if isinstance(detail, dict) else []
+        failed_step = detail.get("failed_step", "发布") if isinstance(detail, dict) else "发布"
+        set_publish_job(
+            status="failed",
+            error=f"{failed_step}失败",
+            logs=[item for item in logs if item.get("step") != "检查更改"],
+            finished_at=datetime.now().astimezone().isoformat(),
+        )
+    except Exception as e:
+        set_publish_job(
+            status="failed",
+            error=str(e),
+            finished_at=datetime.now().astimezone().isoformat(),
+        )
+
+
+@app.post("/api/git/publish/start")
+def start_publish(payload: PublishPayload):
+    with PUBLISH_JOB_LOCK:
+        if PUBLISH_JOB["status"] == "running":
+            raise HTTPException(409, "已有发布任务正在进行")
+        job_id = uuid.uuid4().hex
+        PUBLISH_JOB.update({
+            "id": job_id,
+            "status": "running",
+            "message": "正在发布，请稍候…",
+            "error": "",
+            "logs": [],
+            "started_at": datetime.now().astimezone().isoformat(),
+            "finished_at": None,
+        })
+    thread = threading.Thread(target=run_publish_job, args=(job_id, payload.message), daemon=True)
+    thread.start()
+    return get_publish_job()
+
+
+@app.get("/api/git/publish/job")
+def get_publish_job():
+    with PUBLISH_JOB_LOCK:
+        return json.loads(json.dumps(PUBLISH_JOB, ensure_ascii=False))
 
 
 @app.get("/api/git/deploy-status")

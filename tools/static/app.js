@@ -5,6 +5,7 @@ let selectedPosts = new Set();
 let dirty = false;
 let autosaveTimer = null;
 let deployTimer = null;
+let publishTimer = null;
 
 // ---------- 基础工具 ----------
 async function api(path, opts = {}) {
@@ -392,23 +393,65 @@ async function openPublish() {
     box.innerHTML = s.changed.length
       ? s.changed.map(c => `<div class="change-row"><span class="change-kind ${c.kind}">${c.kind}</span><span>${esc(c.path)}</span></div>`).join('')
       : '<div class="resource-empty">没有待发布的更改</div>';
-    $('btn-do-publish').disabled = !s.changed.length;
+    const job = await api('/api/git/publish/job').catch(() => null);
+    $('btn-do-publish').disabled = !s.changed.length || job?.status === 'running';
+    if (job && job.status !== 'idle') {
+      renderPublishJob(job);
+      if (job.status === 'running') startPublishPolling(new Date(job.started_at).getTime());
+    }
   } catch (e) { box.textContent = e.message; }
+}
+function publishJobHTML(job) {
+  const elapsed = job.started_at ? Math.max(0, Math.round((Date.now() - new Date(job.started_at).getTime()) / 1000)) : 0;
+  let head = '';
+  if (job.status === 'running') head = `<span class="ok">●</span> 正在发布，已等待 ${elapsed} 秒`;
+  else if (job.status === 'success') head = '<span class="ok">✓ 发布完成</span>';
+  else if (job.status === 'failed') head = `<span class="fail">✗ 发布失败</span>${job.error ? `<br><small>${esc(job.error)}</small>` : ''}`;
+  const logs = (job.logs || []).map(s => {
+    const out = String(s.output || '').slice(0, 800);
+    return `<div class="step"><span class="${s.ok ? 'ok' : 'fail'}">${s.ok ? '✓' : '✗'}</span> ${esc(s.step)}` +
+      (out ? `<br><small>${esc(out)}</small>` : '') + '</div>';
+  }).join('');
+  return head ? `<div class="step">${head}</div>${logs}` : logs;
+}
+function renderPublishJob(job) {
+  $('publish-log').innerHTML = publishJobHTML(job);
+}
+function startPublishPolling(startedAt) {
+  clearInterval(publishTimer);
+  let attempts = 0;
+  const poll = async () => {
+    attempts++;
+    try {
+      const job = await api('/api/git/publish/job');
+      renderPublishJob(job);
+      if (job.status === 'running') return;
+      clearInterval(publishTimer);
+      $('btn-do-publish').disabled = false;
+      if (job.status === 'success') startDeployPolling(startedAt || Date.now());
+    } catch (e) {
+      $('publish-log').innerHTML = `<div class="step"><span class="fail">状态查询失败</span><br><small>${esc(e.message)}</small></div>`;
+    }
+    if (attempts >= 120) {
+      clearInterval(publishTimer);
+      $('publish-log').innerHTML += '<div class="step">已停止自动查询，请刷新工作台查看最终结果。</div>';
+    }
+  };
+  poll();
+  publishTimer = setInterval(poll, 1200);
 }
 async function doPublish() {
   const log = $('publish-log');
-  log.innerHTML = '<div class="step">正在发布，请稍候…</div>';
+  log.innerHTML = '<div class="step">正在启动发布任务…</div>';
   $('btn-do-publish').disabled = true;
   const startedAt = Date.now();
   try {
-    const res = await api('/api/git/publish', { method: 'POST', body: JSON.stringify({ message: $('p-message').value || '更新文章' }) });
-    log.innerHTML = '<div class="step"><span class="ok">✓ 发布完成</span></div>' +
-      (res.log || []).map(s => `<div class="step"><span class="ok">✓</span> ${esc(s.step)}<br><small>${esc(s.output || '')}</small></div>`).join('');
-    startDeployPolling(startedAt);
+    await api('/api/git/publish/start', { method: 'POST', body: JSON.stringify({ message: $('p-message').value || '更新文章' }) });
+    startPublishPolling(startedAt);
   } catch (e) {
     log.innerHTML = `<div class="step"><span class="fail">✗ 发布失败</span><br><small>${esc(e.message)}</small></div>`;
+    $('btn-do-publish').disabled = false;
   }
-  $('btn-do-publish').disabled = false;
 }
 function blogURL(s) {
   return s.version ? `${s.url}/?v=${encodeURIComponent(s.version)}` : s.url;
