@@ -295,6 +295,7 @@ async function openImages() {
 
 // ---------- 实时预览与编辑器 ----------
 marked.use(markedKatex({ throwOnError: false, nonStandard: true }));
+marked.setOptions({ gfm: true, breaks: true });
 function renderPreview() {
   const title = $('f-title').value, desc = $('f-desc').value, body = $('f-body').value;
   const md = (title ? `# ${title}\n\n` : '') + (desc ? `> ${desc}\n\n` : '') + body;

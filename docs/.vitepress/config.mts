@@ -18,6 +18,7 @@ export default defineConfig({
     ['link', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css' }]
   ],
   markdown: {
+    breaks: true,
     config: (md) => {
       md.use(mathjax3)
     }

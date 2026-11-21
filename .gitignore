@@ -8,3 +8,5 @@ docs/.vitepress/dist
 tools/trash/
 tools/**/__pycache__/
 tools/*.py
+tools/.venv/
+tools/workbench.*.log

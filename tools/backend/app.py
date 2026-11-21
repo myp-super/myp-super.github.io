@@ -41,6 +41,11 @@ app.add_middleware(
 )
 
 
+@app.get("/api/health")
+def health_check():
+    return {"ok": True}
+
+
 def git_env():
     env = os.environ.copy()
     if GIT_DIR_HINT not in env.get("PATH", ""):
@@ -352,13 +357,14 @@ class HomeSettings(BaseModel):
 
 @app.post("/api/settings/home")
 def save_home_settings(s: HomeSettings):
+    inspiring_text = ''.join(f"  - '{line}'\n" for line in s.inspiring)
     content = f"""---
 layout: home
 blog:
  name: '{s.name}'
  motto: '{s.motto}'
  inspiring:
-{''.join(f"  - '{line}'\n" for line in s.inspiring)}
+{inspiring_text}
  inspiringTimeout: {s.inspiringTimeout}
  pageSize: {s.pageSize}
 ---
@@ -501,7 +507,19 @@ def git_publish(payload: PublishPayload):
             raise HTTPException(500, detail={"failed_step": name, "log": log})
 
     step(["add", "-A"], "暂存更改")
-    step(["commit", "-m", payload.message], "提交")
+    code, _ = run_git(["diff", "--cached", "--quiet"])
+    if code == 1:
+        step(["commit", "-m", payload.message], "提交")
+    elif code == 0:
+        log.append({
+            "step": "检查更改", "cmd": "git diff --cached --quiet",
+            "ok": True, "output": "没有新内容，跳过提交",
+        })
+    else:
+        raise HTTPException(500, detail={
+            "failed_step": "检查更改",
+            "log": log + [{"step": "检查更改", "ok": False, "output": "无法检查暂存区"}],
+        })
     step(["push"], "推送到 GitHub")
     return {"message": "已推送，GitHub Actions 正在构建部署", "log": log}
 
