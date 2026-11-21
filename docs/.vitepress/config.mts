@@ -13,6 +13,7 @@ export default defineConfig({
   title: 'Deep Reflection（邃思）',
   description: 'AI Research · Computer Vision · Visual Perception',
   head: [
+    ['script', {}, "if (location.hostname === 'myp-super.github.io') { location.replace('https://deep-reflection.pages.dev' + location.pathname + location.search + location.hash) }"],
     ['link', { rel: 'icon', href: '/avatar.jpg' }],
     // KaTeX 样式，用于公式渲染
     ['link', { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css' }]
