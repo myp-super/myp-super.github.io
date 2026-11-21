@@ -402,7 +402,7 @@ async function doPublish() {
   const startedAt = Date.now();
   try {
     const res = await api('/api/git/publish', { method: 'POST', body: JSON.stringify({ message: $('p-message').value || '更新文章' }) });
-    log.innerHTML = '<div class="step"><span class="ok">✓ 推送成功</span></div>' +
+    log.innerHTML = '<div class="step"><span class="ok">✓ 发布完成</span></div>' +
       (res.log || []).map(s => `<div class="step"><span class="ok">✓</span> ${esc(s.step)}<br><small>${esc(s.output || '')}</small></div>`).join('');
     startDeployPolling(startedAt);
   } catch (e) {

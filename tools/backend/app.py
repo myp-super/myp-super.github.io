@@ -565,7 +565,8 @@ def git_publish(payload: PublishPayload):
     cf_env = cloudflare_env()
     whoami_args = [WRANGLER_EXE, "whoami"]
     code, out = run_process(whoami_args, cf_env)
-    log.append({"step": "检查 Cloudflare 登录", "cmd": "wrangler whoami", "ok": code == 0, "output": out.strip()})
+    whoami_summary = "Cloudflare OAuth 登录有效" if code == 0 else out.strip()
+    log.append({"step": "检查 Cloudflare 登录", "cmd": "wrangler whoami", "ok": code == 0, "output": whoami_summary})
     if code != 0:
         raise HTTPException(500, detail={"failed_step": "检查 Cloudflare 登录", "log": log})
 
