@@ -42,6 +42,7 @@ CF_PROJECT_NAME = os.environ.get("CLOUDFLARE_PAGES_PROJECT", "deep-reflection")
 NPM_EXE = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
 WRANGLER_EXE = str(REPO_ROOT / "node_modules" / ".bin" / "wrangler.cmd")
 PUBLISH_JOB_LOCK = threading.Lock()
+BACKUP_PUSH_LOCK = threading.Lock()
 PUBLISH_JOB = {
     "id": None,
     "status": "idle",
@@ -51,14 +52,6 @@ PUBLISH_JOB = {
     "started_at": None,
     "finished_at": None,
 }
-PUBLISH_PROGRESS = [
-    ("暂存更改", "正在整理文章与资源"),
-    ("提交", "正在生成版本"),
-    ("推送到 GitHub", "正在推送源码"),
-    ("检查 Cloudflare 登录", "正在确认部署权限"),
-    ("构建博客", "正在生成页面"),
-    ("部署到 Cloudflare Pages", "正在上传站点"),
-]
 
 app = FastAPI(title="Blog Manager")
 app.add_middleware(
@@ -590,15 +583,7 @@ def execute_publish(payload: PublishPayload, progress=None):
             "failed_step": "检查更改",
             "log": log + [{"step": "检查更改", "ok": False, "output": "无法检查暂存区"}],
         })
-    step(["push"], "推送到 GitHub")
     cf_env = cloudflare_env()
-    whoami_args = [WRANGLER_EXE, "whoami"]
-    code, out = run_process(whoami_args, cf_env)
-    whoami_summary = "Cloudflare OAuth 登录有效" if code == 0 else out.strip()
-    record({"step": "检查 Cloudflare 登录", "cmd": "wrangler whoami", "ok": code == 0, "output": whoami_summary})
-    if code != 0:
-        raise HTTPException(500, detail={"failed_step": "检查 Cloudflare 登录", "log": log})
-
     build_args = [NPM_EXE, "run", "build"]
     code, out = run_process(build_args, cf_env)
     record({"step": "构建博客", "cmd": "npm run build", "ok": code == 0, "output": out.strip()})
@@ -618,7 +603,17 @@ def execute_publish(payload: PublishPayload, progress=None):
     record({"step": "部署到 Cloudflare Pages", "cmd": "wrangler pages deploy", "ok": code == 0, "output": out.strip()})
     if code != 0:
         raise HTTPException(500, detail={"failed_step": "部署到 Cloudflare Pages", "log": log})
-    return {"message": "已构建并部署到 Cloudflare Pages", "log": log}
+    threading.Thread(target=backup_to_github, daemon=True).start()
+    return {"message": "已构建并部署到 Cloudflare Pages，GitHub 源码正在后台备份", "log": log}
+
+
+def backup_to_github():
+    """部署成功后静默推送源码备份，不占用一键发布的等待时间。"""
+    with BACKUP_PUSH_LOCK:
+        try:
+            run_git(["push"])
+        except Exception:
+            pass
 
 
 def set_publish_job(**fields):
