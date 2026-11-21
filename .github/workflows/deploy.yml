@@ -32,6 +32,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Stamp deployment version
+        run: |
+          mkdir -p docs/public
+          printf '{"commit":"%s"}\n' "${{ github.sha }}" > docs/public/deploy-version.json
+
       - name: Build VitePress site
         run: npm run build
 

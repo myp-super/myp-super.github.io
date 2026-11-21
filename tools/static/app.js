@@ -422,9 +422,10 @@ function startDeployPolling(startedAt) {
       const isNew = new Date(s.created_at).getTime() >= startedAt - 120000;
       const statusMap = { completed: '已完成', in_progress: '构建中', queued: '排队中' };
       const conclusionMap = { success: '部署成功', failure: '部署失败', cancelled: '已取消' };
-      el.innerHTML = `${isNew ? '本次工作流' : '等待新工作流启动'}：${esc(s.name)}<br>状态：${statusMap[s.status] || s.status}` +
+      el.innerHTML = `${isNew ? '本次部署' : '等待新部署'}：${esc(s.name)}<br>状态：${statusMap[s.status] || s.status}` +
         (s.conclusion ? ` · ${conclusionMap[s.conclusion] || s.conclusion}` : '') +
-        `<br><a href="${s.url}" target="_blank">在 GitHub 查看详情</a>`;
+        (s.message ? `<br>${esc(s.message)}` : '') +
+        `<br><a href="${s.url}" target="_blank">打开博客</a>`;
       if (isNew && s.status === 'completed') {
         clearInterval(deployTimer);
         if (s.conclusion === 'success') el.innerHTML += '<br><strong style="color:#16a34a">线上已更新，可以访问博客查看。</strong>';
@@ -439,7 +440,12 @@ async function checkDeploy() {
   const el = $('deploy-status'); el.textContent = '查询中…';
   const s = await api('/api/git/deploy-status');
   if (s.error) { el.textContent = '查询失败：' + s.error; return; }
-  el.innerHTML = `工作流：${esc(s.name)}<br>状态：${esc(s.status)}${s.conclusion ? ' · ' + esc(s.conclusion) : ''}<br><a href="${s.url}" target="_blank">在 GitHub 查看详情</a>`;
+  const statusMap = { completed: '已完成', in_progress: '构建中', queued: '排队中' };
+  const conclusionMap = { success: '部署成功', failure: '部署失败', cancelled: '已取消' };
+  el.innerHTML = `部署：${esc(s.name)}<br>状态：${statusMap[s.status] || esc(s.status)}` +
+    (s.conclusion ? ` · ${conclusionMap[s.conclusion] || esc(s.conclusion)}` : '') +
+    (s.message ? `<br>${esc(s.message)}` : '') +
+    `<br><a href="${s.url}" target="_blank">打开博客</a>`;
 }
 
 // ---------- 工作台明暗主题 ----------

@@ -526,22 +526,55 @@ def git_publish(payload: PublishPayload):
 
 @app.get("/api/git/deploy-status")
 def deploy_status():
+    """用线上部署标记验证 Pages 是否已切换到当前提交，避免依赖被阻断的 GitHub API。"""
+    import time
+    import urllib.error
     import urllib.request
-    url = "https://api.github.com/repos/myp-super/myp-super.github.io/actions/runs?per_page=1"
-    proxy = "http://127.0.0.1:7890"
-    handler = (urllib.request.ProxyHandler({"http": proxy, "https": proxy})
-               if port_open(7890) else urllib.request.ProxyHandler({}))
-    opener = urllib.request.build_opener(handler)
+
+    code, out = run_git(["rev-parse", "HEAD"])
+    if code != 0:
+        return {"error": "无法读取本地提交版本"}
+    local_commit = out.strip()
+    version_url = f"https://myp-super.github.io/deploy-version.json?sha={local_commit}&t={int(time.time())}"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    request = urllib.request.Request(
+        version_url,
+        headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+    )
     try:
-        with opener.open(url, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        r = data["workflow_runs"][0]
+        with opener.open(request, timeout=12) as resp:
+            deployed = json.loads(resp.read().decode("utf-8"))
+        remote_commit = str(deployed.get("commit", ""))
+        if remote_commit == local_commit:
+            return {
+                "name": "GitHub Pages",
+                "status": "completed",
+                "conclusion": "success",
+                "url": "https://myp-super.github.io",
+                "created_at": datetime.now().astimezone().isoformat(),
+                "message": "线上已更新为当前版本",
+            }
         return {
-            "name": r["name"], "status": r["status"], "conclusion": r.get("conclusion"),
-            "url": r["html_url"], "created_at": r["created_at"],
+            "name": "GitHub Pages",
+            "status": "in_progress",
+            "conclusion": None,
+            "url": "https://myp-super.github.io",
+            "created_at": datetime.now().astimezone().isoformat(),
+            "message": f"正在部署：线上仍是 {remote_commit[:8] or '旧版本'}，等待 {local_commit[:8]}",
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {
+                "name": "GitHub Pages",
+                "status": "in_progress",
+                "conclusion": None,
+                "url": "https://myp-super.github.io",
+                "created_at": datetime.now().astimezone().isoformat(),
+                "message": "正在等待 GitHub Pages 生成新版本标记",
+            }
+        return {"error": f"博客站点返回 HTTP {e.code}"}
+    except Exception:
+        return {"error": "无法连接博客站点，请检查网络后重试"}
 
 
 # ---------- 前端托管 ----------

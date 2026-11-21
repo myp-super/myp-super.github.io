@@ -62,6 +62,7 @@ input[type="checkbox"] { accent-color: var(--navy); }
   padding: 12px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
 }
 .brand {
   display: flex;
@@ -106,8 +107,10 @@ html[data-theme="dark"] .btn.primary:hover { background: #e18a68; }
 /* 三栏布局 */
 .layout {
   flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 310px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -203,7 +206,9 @@ html[data-theme="dark"] .btn.primary:hover { background: #e18a68; }
   overflow: hidden;
   background: var(--surface);
   min-width: 0;
+  min-height: 0;
 }
+.editor > :not(.body-input) { flex: 0 0 auto; }
 .title-input {
   width: 100%;
   color: var(--ink);
@@ -258,8 +263,10 @@ html[data-theme="dark"] .btn.primary:hover { background: #e18a68; }
 .tb-tip { font-size: 11px; color: var(--faint); margin-left: auto; padding-right: 4px; }
 .body-input {
   flex: 1;
+  min-height: 0;
   width: 100%;
   resize: none;
+  overflow-y: auto;
   font-family: "SFMono-Regular", Consolas, "Cascadia Code", monospace;
   font-size: 13px;
   line-height: 1.8;
@@ -281,6 +288,8 @@ html[data-theme="dark"] .btn.primary:hover { background: #e18a68; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .preview-head {
   padding: 17px 22px;
@@ -292,7 +301,9 @@ html[data-theme="dark"] .btn.primary:hover { background: #e18a68; }
 }
 .preview-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px 28px;
   color: var(--soft);
   font-size: 14px;

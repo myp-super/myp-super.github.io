@@ -393,6 +393,43 @@ button, input, textarea { font-family: inherit; }
 }
 html.dark .article-back-link:hover { border-color: rgba(216, 121, 85, 0.48) !important; }
 
+/* Article title */
+.article-hero {
+  margin: 2px 0 36px;
+  padding: 4px 0 28px;
+  border-bottom: 1px solid var(--dr-line);
+}
+.article-hero-title {
+  margin: 0;
+  color: var(--dr-ink);
+  font-family: var(--dr-serif);
+  font-size: clamp(34px, 4.8vw, 52px);
+  font-weight: 500;
+  line-height: 1.16;
+  letter-spacing: -0.032em;
+}
+.article-hero-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 20px;
+  color: var(--dr-muted);
+  font-family: var(--dr-sans);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.article-hero-sep { opacity: 0.55; }
+.article-hero-tag {
+  padding: 3px 8px;
+  border: 1px solid var(--dr-line);
+  border-radius: 5px;
+  color: var(--dr-muted);
+  font-size: 11px;
+}
+html.dark .article-hero-title { color: #ece9e1; }
+html.dark .article-hero-tag { border-color: rgba(235, 227, 214, 0.14); color: #a9a298; }
+
 /* Footer */
 .blog-footer {
   padding: 26px 20px 34px;
