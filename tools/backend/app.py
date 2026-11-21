@@ -606,7 +606,11 @@ def deploy_status():
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     request = urllib.request.Request(
         version_url,
-        headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142.0 Safari/537.36",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
     )
     try:
         with opener.open(request, timeout=12) as resp:
