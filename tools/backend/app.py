@@ -41,6 +41,14 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def disable_static_cache(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
 @app.get("/api/health")
 def health_check():
     return {"ok": True}
