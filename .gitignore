@@ -10,4 +10,5 @@ tools/**/__pycache__/
 tools/*.py
 tools/.venv/
 tools/workbench.*.log
+tools/.cloudflare.env
 docs/public/deploy-version.json

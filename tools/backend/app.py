@@ -34,6 +34,11 @@ TRASH_IMAGES_DIR = TRASH_DIR / "images"
 GIT_EXE = "git"
 GIT_DIR_HINT = r"D:\Git\cmd"
 PREVIEW_PORT = 5173
+PUBLIC_SITE_URL = os.environ.get("BLOG_PUBLIC_URL", "https://deep-reflection.pages.dev").rstrip("/")
+PUBLIC_SITE_NAME = "Cloudflare Pages"
+CF_PROJECT_NAME = os.environ.get("CLOUDFLARE_PAGES_PROJECT", "deep-reflection")
+NPM_EXE = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
+WRANGLER_EXE = str(REPO_ROOT / "node_modules" / ".bin" / "wrangler.cmd")
 
 app = FastAPI(title="Blog Manager")
 app.add_middleware(
@@ -73,6 +78,34 @@ def run_git(args):
         return 1, "git 命令未找到，请确认 Git 已安装。"
     except subprocess.TimeoutExpired:
         return 1, "git 操作超时（120 秒）。"
+
+
+def cloudflare_env():
+    """读取本地 Cloudflare 凭据文件，不把 Token 写进源码或日志。"""
+    env = git_env()
+    env_file = TOOLS_DIR / ".cloudflare.env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            env[key.strip()] = value.strip().strip('"').strip("'")
+    return env
+
+
+def run_process(args, env, timeout=240):
+    try:
+        p = subprocess.run(
+            args, cwd=REPO_ROOT, env=env,
+            capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
+        )
+        return p.returncode, (p.stdout or "") + (p.stderr or "")
+    except FileNotFoundError:
+        return 1, f"命令未找到：{args[0]}"
+    except subprocess.TimeoutExpired:
+        return 1, f"命令执行超时（{timeout} 秒）：{args[0]}"
 
 
 def safe_name(filename: str) -> str:
@@ -529,7 +562,33 @@ def git_publish(payload: PublishPayload):
             "log": log + [{"step": "检查更改", "ok": False, "output": "无法检查暂存区"}],
         })
     step(["push"], "推送到 GitHub")
-    return {"message": "已推送，GitHub Actions 正在构建部署", "log": log}
+    cf_env = cloudflare_env()
+    whoami_args = [WRANGLER_EXE, "whoami"]
+    code, out = run_process(whoami_args, cf_env)
+    log.append({"step": "检查 Cloudflare 登录", "cmd": "wrangler whoami", "ok": code == 0, "output": out.strip()})
+    if code != 0:
+        raise HTTPException(500, detail={"failed_step": "检查 Cloudflare 登录", "log": log})
+
+    build_args = [NPM_EXE, "run", "build"]
+    code, out = run_process(build_args, cf_env)
+    log.append({"step": "构建博客", "cmd": "npm run build", "ok": code == 0, "output": out.strip()})
+    if code != 0:
+        raise HTTPException(500, detail={"failed_step": "构建博客", "log": log})
+
+    if not Path(WRANGLER_EXE).exists():
+        raise HTTPException(500, detail={
+            "failed_step": "检查 Wrangler",
+            "log": log + [{"step": "检查 Wrangler", "ok": False, "output": f"未找到 {WRANGLER_EXE}"}],
+        })
+    deploy_args = [
+        WRANGLER_EXE, "pages", "deploy", "docs/.vitepress/dist",
+        "--project-name", CF_PROJECT_NAME, "--branch", "main", "--commit-dirty=true",
+    ]
+    code, out = run_process(deploy_args, cf_env)
+    log.append({"step": "部署到 Cloudflare Pages", "cmd": "wrangler pages deploy", "ok": code == 0, "output": out.strip()})
+    if code != 0:
+        raise HTTPException(500, detail={"failed_step": "部署到 Cloudflare Pages", "log": log})
+    return {"message": "已构建并部署到 Cloudflare Pages", "log": log}
 
 
 @app.get("/api/git/deploy-status")
@@ -543,7 +602,7 @@ def deploy_status():
     if code != 0:
         return {"error": "无法读取本地提交版本"}
     local_commit = out.strip()
-    version_url = f"https://myp-super.github.io/deploy-version.json?sha={local_commit}&t={int(time.time())}"
+    version_url = f"{PUBLIC_SITE_URL}/deploy-version.json?sha={local_commit}&t={int(time.time())}"
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     request = urllib.request.Request(
         version_url,
@@ -555,30 +614,33 @@ def deploy_status():
         remote_commit = str(deployed.get("commit", ""))
         if remote_commit == local_commit:
             return {
-                "name": "GitHub Pages",
+                "name": PUBLIC_SITE_NAME,
                 "status": "completed",
                 "conclusion": "success",
-                "url": "https://myp-super.github.io",
+                "url": PUBLIC_SITE_URL,
+                "version": local_commit,
                 "created_at": datetime.now().astimezone().isoformat(),
                 "message": "线上已更新为当前版本",
             }
         return {
-            "name": "GitHub Pages",
+            "name": PUBLIC_SITE_NAME,
             "status": "in_progress",
             "conclusion": None,
-            "url": "https://myp-super.github.io",
+            "url": PUBLIC_SITE_URL,
+            "version": local_commit,
             "created_at": datetime.now().astimezone().isoformat(),
             "message": f"正在部署：线上仍是 {remote_commit[:8] or '旧版本'}，等待 {local_commit[:8]}",
         }
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return {
-                "name": "GitHub Pages",
+                "name": PUBLIC_SITE_NAME,
                 "status": "in_progress",
                 "conclusion": None,
-                "url": "https://myp-super.github.io",
+                "url": PUBLIC_SITE_URL,
+                "version": local_commit,
                 "created_at": datetime.now().astimezone().isoformat(),
-                "message": "正在等待 GitHub Pages 生成新版本标记",
+                "message": "正在等待 Cloudflare Pages 生成新版本标记",
             }
         return {"error": f"博客站点返回 HTTP {e.code}"}
     except Exception:

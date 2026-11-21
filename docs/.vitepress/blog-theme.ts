@@ -3,7 +3,7 @@ import { getThemeConfig } from '@sugarat/theme/node'
 import type { Theme } from '@sugarat/theme'
 
 // RSS 订阅配置
-const baseUrl = 'https://myp-super.github.io'
+const baseUrl = 'https://deep-reflection.pages.dev'
 const RSS: Theme.RSSOptions = {
   title: 'Deep Reflection（邃思）',
   baseUrl,

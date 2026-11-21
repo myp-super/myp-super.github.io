@@ -410,6 +410,9 @@ async function doPublish() {
   }
   $('btn-do-publish').disabled = false;
 }
+function blogURL(s) {
+  return s.version ? `${s.url}/?v=${encodeURIComponent(s.version)}` : s.url;
+}
 function startDeployPolling(startedAt) {
   clearInterval(deployTimer);
   let attempts = 0;
@@ -425,7 +428,7 @@ function startDeployPolling(startedAt) {
       el.innerHTML = `${isNew ? '本次部署' : '等待新部署'}：${esc(s.name)}<br>状态：${statusMap[s.status] || s.status}` +
         (s.conclusion ? ` · ${conclusionMap[s.conclusion] || s.conclusion}` : '') +
         (s.message ? `<br>${esc(s.message)}` : '') +
-        `<br><a href="${s.url}" target="_blank">打开博客</a>`;
+        `<br><a href="${blogURL(s)}" target="_blank">打开博客</a>`;
       if (isNew && s.status === 'completed') {
         clearInterval(deployTimer);
         if (s.conclusion === 'success') el.innerHTML += '<br><strong style="color:#16a34a">线上已更新，可以访问博客查看。</strong>';
@@ -445,7 +448,7 @@ async function checkDeploy() {
   el.innerHTML = `部署：${esc(s.name)}<br>状态：${statusMap[s.status] || esc(s.status)}` +
     (s.conclusion ? ` · ${conclusionMap[s.conclusion] || esc(s.conclusion)}` : '') +
     (s.message ? `<br>${esc(s.message)}` : '') +
-    `<br><a href="${s.url}" target="_blank">打开博客</a>`;
+    `<br><a href="${blogURL(s)}" target="_blank">打开博客</a>`;
 }
 
 // ---------- 工作台明暗主题 ----------

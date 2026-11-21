@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vitepress dev docs",
-    "build": "vitepress build docs",
+    "build": "node scripts/stamp-deploy.mjs && vitepress build docs",
     "serve": "vitepress serve docs"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
   "devDependencies": {
     "pagefind": "^1.5.2",
     "typescript": "^5.9.3",
-    "vitepress": "1.6.4"
+    "vitepress": "1.6.4",
+    "wrangler": "^4.166.0"
   }
 }
