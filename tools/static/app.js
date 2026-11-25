@@ -1,4 +1,12 @@
 const API = '';
+const CATEGORY_LABELS = {
+  tech: '技术札记',
+  life: '生活碎片',
+  thought: '思考随笔',
+  story: '人间故事',
+  uncategorized: '暂未归类',
+};
+const CATEGORY_KEYS = Object.keys(CATEGORY_LABELS);
 let currentFile = null;
 let allPosts = [];
 let selectedPosts = new Set();
@@ -26,20 +34,29 @@ const editorFields = () => ({
   title: $('f-title').value,
   description: $('f-desc').value,
   date: $('f-date').value || today(),
+  category: $('f-category').value,
   tags: $('f-tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
   sticky: parseInt($('f-sticky').value || '0', 10),
   author: 'Deep Reflection（邃思）',
   publish: $('f-publish').value === 'true',
   body: $('f-body').value,
 });
+function markCategoryRequired() {
+  const category = $('f-category');
+  const needsCategory = $('f-publish').value === 'true' && !category.value;
+  category.classList.toggle('is-required', needsCategory);
+  category.setAttribute('aria-invalid', needsCategory ? 'true' : 'false');
+}
 function fillEditor(data) {
   $('f-title').value = data.title || '';
   $('f-date').value = data.date || today();
+  $('f-category').value = CATEGORY_KEYS.includes(data.category) ? data.category : '';
   $('f-tags').value = (data.tags || []).join(', ');
   $('f-sticky').value = data.sticky || 0;
   $('f-desc').value = data.description || '';
   $('f-publish').value = data.publish === false ? 'false' : 'true';
   $('f-body').value = data.body || '';
+  markCategoryRequired();
   renderPreview();
 }
 
@@ -116,7 +133,7 @@ function filteredPosts() {
   const q = $('post-search').value.trim().toLowerCase();
   const filter = $('post-filter').value;
   return allPosts.filter(p => {
-    const text = `${p.title} ${p.description} ${(p.tags || []).join(' ')}`.toLowerCase();
+    const text = `${p.title} ${p.description} ${(p.tags || []).join(' ')} ${CATEGORY_LABELS[p.category] || ''}`.toLowerCase();
     if (q && !text.includes(q)) return false;
     if (filter === 'published' && p.publish === false) return false;
     if (filter === 'draft' && p.publish !== false) return false;
@@ -137,11 +154,12 @@ function renderPostList() {
     const div = document.createElement('div');
     div.className = 'post-item' + (p.file === currentFile ? ' active' : '');
     const tags = (p.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+    const category = CATEGORY_LABELS[p.category] || CATEGORY_LABELS.uncategorized;
     div.innerHTML = `
       <input class="post-check" type="checkbox" ${selectedPosts.has(p.file) ? 'checked' : ''}>
       <div class="post-open">
         <div class="t">${p.sticky ? '<span class="pin">置顶</span>' : ''}${esc(p.title)} ${p.publish === false ? '<span class="status-draft">草稿</span>' : ''}</div>
-        <div class="d">${esc(p.date)}</div>
+        <div class="d">${esc(p.date)} · <span class="post-category">${esc(category)}</span></div>
         <div style="margin-top:6px;">${tags}</div>
       </div>`;
     div.querySelector('.post-open').onclick = () => openPost(p.file);
@@ -188,7 +206,24 @@ function newPost(force = false) {
 async function savePost() {
   const payload = { ...editorFields(), old_file: currentFile };
   if (!payload.title.trim()) { alert('标题不能为空'); return; }
-  const res = await api('/api/posts', { method: 'POST', body: JSON.stringify(payload) });
+  if (payload.category && !CATEGORY_KEYS.includes(payload.category)) {
+    alert('文章分类无效，请重新选择');
+    $('f-category').focus();
+    return;
+  }
+  if (payload.publish && !payload.category) {
+    markCategoryRequired();
+    alert('发布前必须选择文章分类。也可以先切换到“草稿”保存。');
+    $('f-category').focus();
+    return;
+  }
+  let res;
+  try {
+    res = await api('/api/posts', { method: 'POST', body: JSON.stringify(payload) });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
   localStorage.removeItem(draftKey());
   currentFile = res.file;
   dirty = false;
@@ -219,13 +254,15 @@ async function applyBulk() {
     payload.tags = input.split(/[,，]/).map(s => s.trim()).filter(Boolean);
   }
   if (action === 'delete' && !confirm(`确定将选中的 ${files.length} 篇文章移入回收站？`)) return;
-  await api('/api/posts/bulk', { method: 'POST', body: JSON.stringify(payload) });
+  const result = await api('/api/posts/bulk', { method: 'POST', body: JSON.stringify(payload) });
+  const failed = (result.results || []).filter(item => !item.ok);
+  if (failed.length) alert(`有 ${failed.length} 篇文章未处理：\n${failed.map(item => `${item.file}：${item.message}`).join('\n')}`);
   if (action === 'delete' && currentFile && files.includes(currentFile)) newPost(true);
   selectedPosts.clear();
   $('bulk-action').value = '';
   dirty = false;
   await loadPosts();
-  hint('save-hint', `批量操作已完成，共处理 ${files.length} 篇文章`);
+  hint('save-hint', `批量操作已完成，成功 ${files.length - failed.length} 篇${failed.length ? `，失败 ${failed.length} 篇` : ''}`);
 }
 $('btn-bulk-apply').onclick = applyBulk;
 
@@ -297,15 +334,23 @@ async function openImages() {
 // ---------- 实时预览与编辑器 ----------
 marked.use(markedKatex({ throwOnError: false, nonStandard: true }));
 marked.setOptions({ gfm: true, breaks: true });
+DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+  if (data.attrName === 'style' && !/^color:\s*#[0-9a-fA-F]{6};?$/.test(String(data.attrValue || '').trim())) {
+    data.keepAttr = false;
+  }
+});
+const bodyEditor = $('f-body');
 function renderPreview() {
   const title = $('f-title').value, desc = $('f-desc').value, body = $('f-body').value;
   const md = (title ? `# ${title}\n\n` : '') + (desc ? `> ${desc}\n\n` : '') + body;
-  $('preview').innerHTML = DOMPurify.sanitize(marked.parse(md));
+  $('preview').innerHTML = DOMPurify.sanitize(marked.parse(md), { ADD_ATTR: ['style'] });
 }
-['f-title', 'f-desc', 'f-body', 'f-date', 'f-tags', 'f-sticky', 'f-publish'].forEach(id => {
+['f-title', 'f-desc', 'f-body', 'f-date', 'f-category', 'f-tags', 'f-sticky', 'f-publish'].forEach(id => {
   $(id).addEventListener('input', markDirty);
   $(id).addEventListener('change', markDirty);
 });
+$('f-publish').addEventListener('change', markCategoryRequired);
+$('f-category').addEventListener('change', markCategoryRequired);
 const SNIPPETS = {
   code: '\n```python\n# 在这里写代码\n\n```\n',
   'formula-block': '\n$$\nE = mc^2\n$$\n',
@@ -320,6 +365,387 @@ function insertAtCursor(text) {
   markDirty();
 }
 document.querySelectorAll('[data-insert]').forEach(btn => btn.onclick = () => insertAtCursor(SNIPPETS[btn.dataset.insert]));
+
+// ---------- 选中文字格式化与段落样式 ----------
+let savedSelection = { start: 0, end: 0 };
+function rememberSelection() {
+  if (document.activeElement === bodyEditor) {
+    savedSelection = { start: bodyEditor.selectionStart, end: bodyEditor.selectionEnd };
+  }
+}
+['select', 'keyup', 'mouseup', 'input'].forEach(evt => bodyEditor.addEventListener(evt, rememberSelection));
+
+function selectionRange() {
+  const length = bodyEditor.value.length;
+  if (document.activeElement === bodyEditor) {
+    return {
+      start: Math.max(0, Math.min(bodyEditor.selectionStart, length)),
+      end: Math.max(0, Math.min(bodyEditor.selectionEnd, length)),
+    };
+  }
+  return {
+    start: Math.max(0, Math.min(savedSelection.start, length)),
+    end: Math.max(0, Math.min(savedSelection.end, length)),
+  };
+}
+
+function replaceRange(start, end, text, selectStart, selectEnd) {
+  const value = bodyEditor.value;
+  bodyEditor.value = value.slice(0, start) + text + value.slice(end);
+  bodyEditor.focus();
+  bodyEditor.selectionStart = selectStart;
+  bodyEditor.selectionEnd = selectEnd;
+  savedSelection = { start: selectStart, end: selectEnd };
+  markDirty();
+}
+
+const INLINE_FORMATS = {
+  bold: { open: '**', close: '**', placeholder: '加粗文字', label: '加粗' },
+  italic: { open: '*', close: '*', placeholder: '倾斜文字', label: '倾斜' },
+  underline: { open: '<u>', close: '</u>', placeholder: '下划线文字', label: '下划线' },
+  strike: { open: '~~', close: '~~', placeholder: '删除线文字', label: '删除线' },
+  code: { open: '`', close: '`', placeholder: '代码', label: '行内代码' },
+};
+
+function applyInlineFormat(kind) {
+  const format = INLINE_FORMATS[kind];
+  if (!format) return;
+  const { start, end } = selectionRange();
+  const selected = bodyEditor.value.slice(start, end);
+  const parts = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
+  const lead = parts ? parts[1] : '';
+  const core = parts ? parts[2] : '';
+  const trail = parts ? parts[3] : '';
+
+  // 再点一次同一种格式：选中文字外侧已有标记时，直接取消。
+  const before = start - lead.length - format.open.length;
+  const after = end + trail.length;
+  if (before >= 0
+      && bodyEditor.value.slice(before, before + format.open.length) === format.open
+      && bodyEditor.value.slice(after, after + format.close.length) === format.close) {
+    const inner = bodyEditor.value.slice(before + format.open.length, after);
+    replaceRange(before, after + format.close.length, inner, before, before + inner.length);
+    hint('save-hint', `已取消${format.label}`);
+    return;
+  }
+
+  if (core && core.startsWith(format.open) && core.endsWith(format.close)
+      && core.length >= format.open.length + format.close.length) {
+    const inner = core.slice(format.open.length, core.length - format.close.length);
+    const text = lead + inner + trail;
+    replaceRange(start, end, text, start + lead.length, start + lead.length + inner.length);
+    hint('save-hint', `已取消${format.label}`);
+    return;
+  }
+
+  if (!core) {
+    const text = lead + format.open + format.placeholder + format.close + trail;
+    const innerStart = start + lead.length + format.open.length;
+    replaceRange(start, end, text, innerStart, innerStart + format.placeholder.length);
+    hint('save-hint', `${format.label}占位文字已选中，直接输入即可替换`);
+    return;
+  }
+
+  const text = lead + format.open + core + format.close + trail;
+  const innerStart = start + lead.length + format.open.length;
+  replaceRange(start, end, text, innerStart, innerStart + core.length);
+  hint('save-hint', `已应用${format.label}`);
+}
+
+function applyFontSize(size) {
+  if (!size) return;
+  const { start, end } = selectionRange();
+  const selected = bodyEditor.value.slice(start, end);
+  const parts = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
+  const lead = parts ? parts[1] : '';
+  const core = parts ? parts[2] : '';
+  const trail = parts ? parts[3] : '';
+  if (/\n\s*\n/.test(core)) {
+    hint('save-hint', '字号只能设置在同一段落内的文字');
+    return;
+  }
+  const className = `dr-text-${size}`;
+  const labelMap = { sm: '小', base: '标准', lg: '大', xl: '特大', '2xl': '超大' };
+  const label = labelMap[size] || '标准';
+
+  if (!core) {
+    const text = `${lead}<span class="${className}">字号示例</span>${trail}`;
+    const innerStart = start + lead.length + `<span class="${className}">`.length;
+    replaceRange(start, end, text, innerStart, innerStart + 4);
+    hint('save-hint', `字号已设为${label}，占位文字已选中`);
+    return;
+  }
+
+  const whole = core.match(/^<span class="dr-text-(?:sm|base|lg|xl|2xl)">([\s\S]*)<\/span>$/);
+  if (whole) {
+    const inner = whole[1];
+    if (size === 'base') {
+      const text = lead + inner + trail;
+      replaceRange(start, end, text, start + lead.length, start + lead.length + inner.length);
+    } else {
+      const text = lead + `<span class="${className}">${inner}</span>` + trail;
+      const innerStart = start + lead.length + `<span class="${className}">`.length;
+      replaceRange(start, end, text, innerStart, innerStart + inner.length);
+    }
+    hint('save-hint', `字号已设为${label}`);
+    return;
+  }
+
+  // 光标/选区在字号标签内部时，替换外层字号而不是继续套一层。
+  const beforeText = bodyEditor.value.slice(Math.max(0, start - 60), start);
+  const around = beforeText.match(/<span class="dr-text-(?:sm|base|lg|xl|2xl)">$/);
+  const afterText = bodyEditor.value.slice(end, Math.min(bodyEditor.value.length, end + 8));
+  if (around && afterText.startsWith('</span>')) {
+    const tagStart = start - around[0].length;
+    const tagEnd = end + '</span>'.length;
+    const replacement = size === 'base' ? core : `<span class="${className}">${core}</span>`;
+    const innerStart = tagStart + (size === 'base' ? 0 : `<span class="${className}">`.length);
+    replaceRange(tagStart, tagEnd, replacement, innerStart, innerStart + core.length);
+    hint('save-hint', `字号已设为${label}`);
+    return;
+  }
+
+  const text = lead + `<span class="${className}">${core}</span>` + trail;
+  const innerStart = start + lead.length + `<span class="${className}">`.length;
+  replaceRange(start, end, text, innerStart, innerStart + core.length);
+  hint('save-hint', `字号已设为${label}`);
+}
+
+function findMatchingSpanEnd(text, openStart) {
+  const re = /<span[^>]*>|<\/span>/gi;
+  re.lastIndex = openStart;
+  let depth = 0;
+  let match;
+  while ((match = re.exec(text))) {
+    if (match[0].startsWith('</')) {
+      depth--;
+      if (depth === 0) return match.index + match[0].length;
+    } else {
+      depth++;
+    }
+  }
+  return -1;
+}
+
+function findColorSpanContainer(text, start, end) {
+  const re = /<span class="dr-color-text" style="color: #[0-9a-fA-F]{6};">/g;
+  const opens = [];
+  let match;
+  while ((match = re.exec(text)) && match.index < start) opens.push(match.index);
+  for (let i = opens.length - 1; i >= 0; i--) {
+    const closeEnd = findMatchingSpanEnd(text, opens[i]);
+    if (closeEnd >= end) return { start: opens[i], end: closeEnd };
+  }
+  return null;
+}
+
+function applyTextColor(color, reset = false) {
+  const normalized = String(color || '').toLowerCase();
+  if (!reset && !/^#[0-9a-fA-F]{6}$/.test(normalized)) return;
+  let { start, end } = selectionRange();
+  const value = bodyEditor.value;
+  if (start === end && reset) {
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const lineEndRaw = value.indexOf('\n', start);
+    const lineEnd = lineEndRaw === -1 ? value.length : lineEndRaw;
+    start = lineStart;
+    end = lineEnd;
+  }
+  const selected = bodyEditor.value.slice(start, end);
+  const parts = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
+  const lead = parts ? parts[1] : '';
+  const core = parts ? parts[2] : '';
+  const trail = parts ? parts[3] : '';
+  if (/\n\s*\n/.test(core)) {
+    hint('save-hint', '字体颜色只能设置在同一段落内的文字');
+    return;
+  }
+
+  const whole = core.match(/^<span class="dr-color-text" style="color: (#[0-9a-fA-F]{6});">([\s\S]*)<\/span>$/);
+  const beforeText = bodyEditor.value.slice(Math.max(0, start - 80), start);
+  const around = beforeText.match(/<span class="dr-color-text" style="color: (#[0-9a-fA-F]{6});">$/);
+  const afterText = bodyEditor.value.slice(end, Math.min(bodyEditor.value.length, end + 8));
+
+  if (reset) {
+    if (whole) {
+      const text = lead + whole[2] + trail;
+      replaceRange(start, end, text, start + lead.length, start + lead.length + whole[2].length);
+      hint('save-hint', '已恢复默认文字颜色');
+      return;
+    }
+    if (around && afterText.startsWith('</span>')) {
+      const tagStart = start - around[0].length;
+      const inner = lead + core + trail;
+      replaceRange(tagStart, end + 7, inner, tagStart, tagStart + inner.length);
+      hint('save-hint', '已恢复默认文字颜色');
+      return;
+    }
+    const container = findColorSpanContainer(value, start, end);
+    if (container) {
+      const openLen = value.slice(container.start).match(/^<span class="dr-color-text" style="color: #[0-9a-fA-F]{6};">/)[0].length;
+      const inner = value.slice(container.start + openLen, container.end - 7);
+      replaceRange(container.start, container.end, inner, container.start, container.start + inner.length);
+      hint('save-hint', '已恢复默认文字颜色');
+      return;
+    }
+    const cleaned = selected.replace(/<span class="dr-color-text" style="color: #?[0-9a-fA-F]{6};?">([\s\S]*?)<\/span>/g, '$1');
+    if (cleaned !== selected) {
+      replaceRange(start, end, cleaned, start, start + cleaned.length);
+      hint('save-hint', '已恢复默认文字颜色');
+    } else {
+      hint('save-hint', '选区或当前行没有字体颜色');
+    }
+    return;
+  }
+
+  if (!core) {
+    const openTag = `<span class="dr-color-text" style="color: ${normalized};">`;
+    const text = `${lead}${openTag}彩色文字</span>${trail}`;
+    const innerStart = start + lead.length + openTag.length;
+    replaceRange(start, end, text, innerStart, innerStart + 4);
+    hint('save-hint', '已应用字体颜色，占位文字已选中');
+    return;
+  }
+
+  if (whole) {
+    const openTag = `<span class="dr-color-text" style="color: ${normalized};">`;
+    const text = lead + openTag + whole[2] + '</span>' + trail;
+    const innerStart = start + lead.length + openTag.length;
+    replaceRange(start, end, text, innerStart, innerStart + whole[2].length);
+    hint('save-hint', `字体颜色已设为 ${normalized}`);
+    return;
+  }
+
+  if (around && afterText.startsWith('</span>')) {
+    const tagStart = start - around[0].length;
+    const openTag = `<span class="dr-color-text" style="color: ${normalized};">`;
+    const inner = lead + core + trail;
+    replaceRange(tagStart, end + 7, openTag + inner + '</span>', tagStart + openTag.length, tagStart + openTag.length + inner.length);
+    hint('save-hint', `字体颜色已设为 ${normalized}`);
+    return;
+  }
+
+  const openTag = `<span class="dr-color-text" style="color: ${normalized};">`;
+  const text = lead + openTag + core + '</span>' + trail;
+  const innerStart = start + lead.length + openTag.length;
+  replaceRange(start, end, text, innerStart, innerStart + core.length);
+  hint('save-hint', `字体颜色已设为 ${normalized}`);
+}
+
+function clearInlineFormat() {
+  let { start, end } = selectionRange();
+  const value = bodyEditor.value;
+  if (start === end) {
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const lineEndRaw = value.indexOf('\n', start);
+    const lineEnd = lineEndRaw === -1 ? value.length : lineEndRaw;
+    start = lineStart;
+    end = lineEnd;
+  }
+  const selected = value.slice(start, end);
+  const cleaned = selected
+    .replace(/<span class="dr-color-text" style="color: #?[0-9a-fA-F]{6};?">([\s\S]*?)<\/span>/g, '$1')
+    .replace(/<span class="dr-text-(?:sm|base|lg|xl|2xl)">([\s\S]*?)<\/span>/g, '$1')
+    .replace(/<u>([\s\S]*?)<\/u>/gi, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/~~([^~\n]+)~~/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1');
+  if (cleaned === selected) {
+    hint('save-hint', '选区或当前行没有可清除的行内格式');
+    return;
+  }
+  replaceRange(start, end, cleaned, start, start + cleaned.length);
+  hint('save-hint', '已清除行内格式');
+}
+
+function applyBlockStyle(style) {
+  const value = bodyEditor.value;
+  let { start, end } = selectionRange();
+  let blockStart = value.lastIndexOf('\n', start - 1) + 1;
+  let probe = end > start ? end - 1 : end;
+  let blockEnd = value.indexOf('\n', probe);
+  if (blockEnd === -1) blockEnd = value.length;
+
+  const lines = value.slice(blockStart, blockEnd).split('\n');
+  let listIndex = 1;
+  const nextLines = lines.map(line => {
+    let content = line.replace(/^\s+/, '');
+    for (let i = 0; i < 2; i++) content = content.replace(/^(#{1,6}|>|[-*+]|\d+\.)\s+/, '');
+    content = content.trimEnd();
+    if (!content) return '';
+    switch (style) {
+      case 'h1': return `# ${content}`;
+      case 'h2': return `## ${content}`;
+      case 'h3': return `### ${content}`;
+      case 'quote': return `> ${content}`;
+      case 'ul': return `- ${content}`;
+      case 'ol': return `${listIndex++}. ${content}`;
+      default: return content;
+    }
+  });
+
+  const text = nextLines.join('\n');
+  replaceRange(blockStart, blockEnd, text, blockStart, blockStart + text.length);
+  const labels = { p: '正文', h1: '一级标题', h2: '二级标题', h3: '三级标题', quote: '引用', ul: '无序列表', ol: '有序列表' };
+  hint('save-hint', `段落样式：${labels[style] || '正文'}`);
+}
+
+document.querySelectorAll('[data-format]').forEach(btn => {
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.onclick = () => {
+    if (btn.dataset.format === 'clear') clearInlineFormat();
+    else applyInlineFormat(btn.dataset.format);
+  };
+});
+
+const formatStyle = $('format-style');
+formatStyle.addEventListener('pointerdown', rememberSelection);
+formatStyle.addEventListener('change', () => {
+  applyBlockStyle(formatStyle.value);
+  bodyEditor.focus();
+});
+
+const fontSizeSelect = $('format-size');
+fontSizeSelect.addEventListener('pointerdown', rememberSelection);
+fontSizeSelect.addEventListener('change', () => {
+  const size = fontSizeSelect.value;
+  if (!size) return;
+  applyFontSize(size);
+  fontSizeSelect.value = '';
+  bodyEditor.focus();
+});
+
+document.querySelectorAll('.color-swatch').forEach(btn => {
+  btn.addEventListener('pointerdown', rememberSelection);
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.onclick = () => {
+    document.querySelectorAll('.color-swatch').forEach(item => {
+      item.classList.remove('is-active');
+      item.setAttribute('aria-pressed', 'false');
+    });
+    btn.classList.add('is-active');
+    btn.setAttribute('aria-pressed', 'true');
+    applyTextColor(btn.dataset.color || '', btn.dataset.reset === 'true');
+    bodyEditor.focus();
+  };
+});
+
+bodyEditor.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const key = e.key.toLowerCase();
+  if (e.altKey && ['0', '1', '2', '3'].includes(key)) {
+    e.preventDefault();
+    const style = key === '1' ? 'h1' : key === '2' ? 'h2' : key === '3' ? 'h3' : 'p';
+    formatStyle.value = style;
+    applyBlockStyle(style);
+    return;
+  }
+  if (key === 'b') { e.preventDefault(); applyInlineFormat('bold'); }
+  else if (key === 'i') { e.preventDefault(); applyInlineFormat('italic'); }
+  else if (key === 'u') { e.preventDefault(); applyInlineFormat('underline'); }
+  else if (key === 'x' && e.shiftKey) { e.preventDefault(); applyInlineFormat('strike'); }
+});
 
 // ---------- 图片上传与粘贴 ----------
 async function uploadImageFile(file) {
@@ -341,7 +767,6 @@ $('f-body').addEventListener('paste', e => {
 });
 
 // 拖拽图片到编辑区：上传后按拖入顺序插入 Markdown
-const bodyEditor = $('f-body');
 ['dragenter', 'dragover'].forEach(type => bodyEditor.addEventListener(type, e => {
   e.preventDefault();
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';

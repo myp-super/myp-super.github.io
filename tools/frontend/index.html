@@ -12,7 +12,7 @@ try {
   }
 } catch (e) {}
 </script>
-<link rel="stylesheet" href="/static/style.css?v=cloudflare-v4">
+<link rel="stylesheet" href="/static/style.css?v=cloudflare-v9">
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.13/lib/index.umd.js"></script>
@@ -71,11 +71,66 @@ try {
     <input id="f-title" class="title-input" placeholder="文章标题">
     <div class="meta-row">
       <label>日期<input id="f-date" type="date"></label>
+      <label>分类<select id="f-category" class="meta-select">
+        <option value="">选择分类</option>
+        <option value="tech">技术札记</option>
+        <option value="life">生活碎片</option>
+        <option value="thought">思考随笔</option>
+        <option value="story">人间故事</option>
+        <option value="uncategorized">暂未归类</option>
+      </select></label>
       <label>标签<input id="f-tags" placeholder="逗号分隔，如 视觉, 笔记"></label>
       <label>置顶<input id="f-sticky" type="number" min="0" step="1" value="0"></label>
       <label>状态<select id="f-publish"><option value="true">发布</option><option value="false">草稿</option></select></label>
     </div>
     <input id="f-desc" class="desc-input" placeholder="一句话摘要">
+    <div class="format-toolbar" role="toolbar" aria-label="正文格式">
+      <label class="format-style-wrap" title="段落样式">
+        <span>段落</span>
+        <select id="format-style" class="format-select">
+          <option value="p">正文</option>
+          <option value="h1">一级标题</option>
+          <option value="h2">二级标题</option>
+          <option value="h3">三级标题</option>
+          <option value="quote">引用</option>
+          <option value="ul">无序列表</option>
+          <option value="ol">有序列表</option>
+        </select>
+      </label>
+      <label class="format-style-wrap" title="选中文字的字号">
+        <span>字号</span>
+        <select id="format-size" class="format-select">
+          <option value="">字号</option>
+          <option value="sm">小</option>
+          <option value="base">标准</option>
+          <option value="lg">大</option>
+          <option value="xl">特大</option>
+          <option value="2xl">超大</option>
+        </select>
+      </label>
+      <div class="format-color-wrap" title="选中文字的颜色">
+        <span>颜色</span>
+        <div class="color-palette" id="color-palette" role="group" aria-label="常用文字颜色">
+          <button class="color-swatch" type="button" data-color="#c0392b" style="--swatch:#c0392b" title="红色" aria-label="红色"></button>
+          <button class="color-swatch" type="button" data-color="#d97706" style="--swatch:#d97706" title="橙色" aria-label="橙色"></button>
+          <button class="color-swatch" type="button" data-color="#b58900" style="--swatch:#b58900" title="黄色" aria-label="黄色"></button>
+          <button class="color-swatch" type="button" data-color="#2f855a" style="--swatch:#2f855a" title="绿色" aria-label="绿色"></button>
+          <button class="color-swatch" type="button" data-color="#2563eb" style="--swatch:#2563eb" title="蓝色" aria-label="蓝色"></button>
+          <button class="color-swatch" type="button" data-color="#7c3aed" style="--swatch:#7c3aed" title="紫色" aria-label="紫色"></button>
+          <button class="color-swatch" type="button" data-color="#6b7280" style="--swatch:#6b7280" title="灰色" aria-label="灰色"></button>
+          <button class="color-swatch color-default" type="button" data-reset="true" title="恢复默认文字颜色" aria-label="恢复默认文字颜色">默认</button>
+        </div>
+      </div>
+      <span class="tb-divider"></span>
+      <button class="tb-btn fmt-btn" type="button" data-format="bold" title="加粗（Ctrl+B）"><span class="format-glyph strong">B</span></button>
+      <button class="tb-btn fmt-btn" type="button" data-format="italic" title="倾斜（Ctrl+I）"><span class="format-glyph italic">I</span></button>
+      <button class="tb-btn fmt-btn" type="button" data-format="underline" title="下划线（Ctrl+U）"><span class="format-glyph underline">U</span></button>
+      <button class="tb-btn fmt-btn" type="button" data-format="strike" title="删除线"><span class="format-glyph strike">S</span></button>
+      <button class="tb-btn fmt-btn code-fmt" type="button" data-format="code" title="行内代码">‹/›</button>
+      <span class="tb-divider"></span>
+      <button class="tb-btn fmt-btn clear-fmt" type="button" data-format="clear" title="清除选区或当前行的行内格式">清除格式</button>
+      <span class="tb-tip">选中文字应用格式 · 右侧实时预览</span>
+    </div>
     <div class="toolbar">
       <button class="tb-btn" data-insert="code">代码块</button>
       <button class="tb-btn" data-insert="formula-block">公式 $$</button>
@@ -149,6 +204,6 @@ try {
   </div>
 </div>
 
-<script src="/static/app.js?v=cloudflare-v4"></script>
+<script src="/static/app.js?v=cloudflare-v9"></script>
 </body>
 </html>

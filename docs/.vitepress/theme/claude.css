@@ -301,6 +301,11 @@ button, input, textarea { font-family: inherit; }
   line-height: 1.4;
 }
 .vp-doc h3 { margin: 38px 0 14px; font-size: 22px; }
+.vp-doc .dr-text-sm { font-size: 0.82em; }
+.vp-doc .dr-text-base { font-size: 1em; }
+.vp-doc .dr-text-lg { font-size: 1.2em; }
+.vp-doc .dr-text-xl { font-size: 1.5em; }
+.vp-doc .dr-text-2xl { font-size: 1.85em; }
 .vp-doc p { margin: 18px 0; }
 .vp-doc strong { color: #24221f; font-weight: 650; }
 .vp-doc a { color: var(--dr-accent); text-decoration: none; border-bottom: 1px solid rgba(189, 91, 56, 0.28); }
@@ -420,6 +425,17 @@ html.dark .article-back-link:hover { border-color: rgba(216, 121, 85, 0.48) !imp
   letter-spacing: 0.02em;
 }
 .article-hero-sep { opacity: 0.55; }
+.article-hero-category {
+  padding: 3px 9px;
+  border: 1px solid rgba(189, 91, 56, 0.26);
+  border-radius: 5px;
+  background: var(--vp-c-brand-soft);
+  color: var(--dr-accent);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.article-hero-category:hover { border-color: rgba(189, 91, 56, 0.5); color: var(--dr-accent); }
 .article-hero-tag {
   padding: 3px 8px;
   border: 1px solid var(--dr-line);
@@ -428,7 +444,12 @@ html.dark .article-back-link:hover { border-color: rgba(216, 121, 85, 0.48) !imp
   font-size: 11px;
 }
 html.dark .article-hero-title { color: #ece9e1; }
+html.dark .article-hero-category { border-color: rgba(223, 133, 98, 0.28); background: rgba(189, 91, 56, 0.14); color: #df8562; }
 html.dark .article-hero-tag { border-color: rgba(235, 227, 214, 0.14); color: #a9a298; }
+
+/* Article category sidebar replaces the theme's related-article panel. */
+.has-category-sidebar .sidebar { display: none; }
+.has-category-sidebar .recommend { display: none; }
 
 /* Footer */
 .blog-footer {

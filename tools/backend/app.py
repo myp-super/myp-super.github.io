@@ -33,7 +33,7 @@ TRASH_DIR = TOOLS_DIR / "trash"
 TRASH_POSTS_DIR = TRASH_DIR / "posts"
 TRASH_IMAGES_DIR = TRASH_DIR / "images"
 
-GIT_EXE = "git"
+GIT_EXE = r"D:\Git\cmd\git.exe" if Path(r"D:\Git\cmd\git.exe").exists() else "git"
 GIT_DIR_HINT = r"D:\Git\cmd"
 PREVIEW_PORT = 5173
 PUBLIC_SITE_URL = os.environ.get("BLOG_PUBLIC_URL", "https://deep-reflection.pages.dev").rstrip("/")
@@ -41,6 +41,15 @@ PUBLIC_SITE_NAME = "Cloudflare Pages"
 CF_PROJECT_NAME = os.environ.get("CLOUDFLARE_PAGES_PROJECT", "deep-reflection")
 NPM_EXE = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
 WRANGLER_EXE = str(REPO_ROOT / "node_modules" / ".bin" / "wrangler.cmd")
+CATEGORY_KEYS = {"tech", "life", "thought", "story", "uncategorized"}
+CATEGORY_LABELS = {
+    "tech": "技术札记",
+    "life": "生活碎片",
+    "thought": "思考随笔",
+    "story": "人间故事",
+    "uncategorized": "暂未归类",
+}
+DEFAULT_CATEGORY = "uncategorized"
 PUBLISH_JOB_LOCK = threading.Lock()
 BACKUP_PUSH_LOCK = threading.Lock()
 PUBLISH_JOB = {
@@ -60,10 +69,12 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def disable_static_cache(request, call_next):
+async def disable_ui_cache(request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith("/static/"):
-        response.headers["Cache-Control"] = "no-store, max-age=0"
+    if request.url.path.startswith("/static/") or request.url.path in {"/", "/index.html"}:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 
@@ -169,6 +180,7 @@ def post_info(path: Path, trash_name: str | None = None):
         "title": fm.get("title", path.stem),
         "description": fm.get("description", ""),
         "date": str(fm.get("date", "")),
+        "category": fm.get("category") if fm.get("category") in CATEGORY_KEYS else DEFAULT_CATEGORY,
         "tags": fm.get("tags", []) or [],
         "sticky": fm.get("sticky", 0) or 0,
         "author": fm.get("author", ""),
@@ -241,6 +253,7 @@ class PostPayload(BaseModel):
     title: str
     description: str = ""
     date: str = ""
+    category: str = ""
     tags: list[str] = []
     sticky: int = 0
     author: str = "Deep Reflection（邃思）"
@@ -255,6 +268,11 @@ def save_post(payload: PostPayload):
     title = payload.title.strip()
     if not title:
         raise HTTPException(400, "标题不能为空")
+    category = payload.category.strip()
+    if category and category not in CATEGORY_KEYS:
+        raise HTTPException(400, "文章分类无效，请重新选择")
+    if payload.publish and not category:
+        raise HTTPException(400, "发布前必须选择文章分类，或先保存为草稿")
     filename = safe_name(payload.file or payload.old_file or (slugify(title) + ".md"))
     path = POSTS_DIR / filename
     if payload.old_file and payload.old_file != filename:
@@ -266,6 +284,9 @@ def save_post(payload: PostPayload):
         "description": payload.description,
         "date": payload.date or datetime.now().strftime("%Y-%m-%d"),
     }
+    if category:
+        fm["category"] = category
+        fm["categories"] = [CATEGORY_LABELS[category]]
     if payload.tags:
         fm["tags"] = payload.tags
     if payload.sticky:
@@ -301,6 +322,9 @@ async def import_post(file: UploadFile = File(...)):
         raise HTTPException(400, f"frontmatter 格式错误：{e}")
     fm.setdefault("title", Path(original_name).stem)
     fm.setdefault("date", datetime.now().strftime("%Y-%m-%d"))
+    if fm.get("category") not in CATEGORY_KEYS:
+        fm["category"] = DEFAULT_CATEGORY
+    fm["categories"] = [CATEGORY_LABELS[fm["category"]]]
 
     filename = safe_name(Path(original_name).stem + ".md")
     POSTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -332,6 +356,8 @@ def set_publish_state(filename: str, payload: PublishStatePayload):
         raise HTTPException(404, "文章不存在")
     fm, body = parse_post(path)
     if payload.publish:
+        if fm.get("category") not in CATEGORY_KEYS:
+            raise HTTPException(400, "发布前必须先选择文章分类")
         fm.pop("publish", None)
     else:
         fm["publish"] = False
@@ -382,6 +408,9 @@ def bulk_posts(payload: BulkPayload):
         elif payload.action == "draft":
             fm["publish"] = False
         elif payload.action == "publish":
+            if fm.get("category") not in CATEGORY_KEYS:
+                results.append({"file": filename, "ok": False, "message": "发布前请先选择分类"})
+                continue
             fm.pop("publish", None)
         elif payload.action == "unpin":
             fm.pop("sticky", None)
