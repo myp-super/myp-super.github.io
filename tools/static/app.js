@@ -789,10 +789,19 @@ document.addEventListener('drop', e => e.preventDefault());
 
 // ---------- 站点设置 ----------
 async function openSettings() {
-  const s = await api('/api/settings/home');
+  const [s, gate] = await Promise.all([
+    api('/api/settings/home'),
+    api('/api/settings/gate'),
+  ]);
   $('s-name').value = s.name || ''; $('s-motto').value = s.motto || '';
   $('s-inspiring').value = (s.inspiring || []).join('\n');
   $('s-timeout').value = s.inspiringTimeout || 3500; $('s-pagesize').value = s.pageSize || 6;
+  $('s-gate-enabled').checked = !!gate.enabled;
+  $('s-gate-password').value = '';
+  $('s-gate-password').placeholder = gate.hasPassword ? '已设置口令，留空不修改' : '设置一个访问口令';
+  $('s-gate-note').textContent = gate.hasPassword
+    ? '已设置口令。修改口令后，旧口令立即失效。'
+    : '尚未设置口令，启用前请先填写。';
   $('settings-modal').classList.remove('hidden');
 }
 async function saveSettings() {
@@ -802,9 +811,20 @@ async function saveSettings() {
     inspiringTimeout: parseInt($('s-timeout').value || '3500', 10),
     pageSize: parseInt($('s-pagesize').value || '6', 10),
   };
-  await api('/api/settings/home', { method: 'POST', body: JSON.stringify(payload) });
-  hint('settings-hint', '已保存，发布后生效');
-  setTimeout(() => $('settings-modal').classList.add('hidden'), 800);
+  try {
+    await api('/api/settings/gate', {
+      method: 'POST',
+      body: JSON.stringify({
+        enabled: $('s-gate-enabled').checked,
+        password: $('s-gate-password').value,
+      }),
+    });
+    await api('/api/settings/home', { method: 'POST', body: JSON.stringify(payload) });
+    hint('settings-hint', '已保存，发布后生效');
+    setTimeout(() => $('settings-modal').classList.add('hidden'), 800);
+  } catch (e) {
+    hint('settings-hint', e.message || '保存失败');
+  }
 }
 
 // ---------- 发布前变更清单 ----------

@@ -1,9 +1,11 @@
 """博客管理工具 - FastAPI 后端
 文章管理、回收站、图片资源库、站点设置、Git 发布与预览。
 """
+import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -27,6 +29,7 @@ DOCS_DIR = REPO_ROOT / "docs"
 POSTS_DIR = DOCS_DIR / "posts"
 IMAGES_DIR = DOCS_DIR / "public" / "images"
 INDEX_MD = DOCS_DIR / "index.md"
+GATE_CONFIG_PATH = DOCS_DIR / ".vitepress" / "site-gate.json"
 STATIC_DIR = TOOLS_DIR / "static"
 FRONTEND_DIR = TOOLS_DIR / "frontend"
 TRASH_DIR = TOOLS_DIR / "trash"
@@ -454,6 +457,61 @@ blog:
 """
     INDEX_MD.write_text(content, encoding="utf-8")
     return {"message": "首页设置已保存"}
+
+
+# ---------- 访问口令 ----------
+def read_gate_config():
+    default = {"enabled": False, "salt": "", "hash": ""}
+    if not GATE_CONFIG_PATH.exists():
+        return default
+    try:
+        data = json.loads(GATE_CONFIG_PATH.read_text(encoding="utf-8"))
+        return {
+            "enabled": bool(data.get("enabled")),
+            "salt": str(data.get("salt") or ""),
+            "hash": str(data.get("hash") or ""),
+        }
+    except Exception:
+        return default
+
+
+class GateSettings(BaseModel):
+    enabled: bool = False
+    password: str = ""
+
+
+@app.get("/api/settings/gate")
+def get_gate_settings():
+    gate = read_gate_config()
+    return {
+        "enabled": gate["enabled"],
+        "hasPassword": bool(gate["hash"]),
+    }
+
+
+@app.post("/api/settings/gate")
+def save_gate_settings(s: GateSettings):
+    gate = read_gate_config()
+    password = s.password.strip()
+    salt = gate["salt"]
+    digest = gate["hash"]
+
+    if password:
+        salt = secrets.token_hex(16)
+        digest = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+    elif s.enabled and not digest:
+        raise HTTPException(400, "启用访问口令前，请先设置一个口令")
+
+    GATE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GATE_CONFIG_PATH.write_text(
+        json.dumps({"enabled": bool(s.enabled), "salt": salt, "hash": digest}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "message": "访问口令已保存",
+        "enabled": bool(s.enabled),
+        "hasPassword": bool(digest),
+    }
 
 
 # ---------- 图片资源库 ----------

@@ -4,6 +4,7 @@ import { useData, useRoute, withBase } from 'vitepress'
 import BlogTheme from '@sugarat/theme'
 import BlogCategoryFilter from './BlogCategoryFilter.vue'
 import ArticleCategorySidebar from './ArticleCategorySidebar.vue'
+import SiteGate from './SiteGate.vue'
 import { BLOG_CATEGORIES, categoryFromMeta, categoryLabel } from './categories'
 
 const ThemeLayout = BlogTheme.Layout
@@ -55,6 +56,7 @@ const articleTags = computed(() => {
 </script>
 
 <template>
+  <SiteGate />
   <ThemeLayout :class="{ 'has-category-sidebar': showBack }">
     <template #home-hero-before>
       <BlogCategoryFilter v-if="isHome" />
