@@ -30,6 +30,9 @@ const blogTheme = getThemeConfig({
   // 文章默认作者
   author: 'Deep Reflection（邃思）',
 
+  // 首页侧栏不再显示标签云（栏目筛选已取代标签入口）
+  homeTags: false,
+
   // 友链 / 公告：暂未配置，需要时按官方文档添加 friend、popover 字段
 })
 
